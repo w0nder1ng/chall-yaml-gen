@@ -5,6 +5,7 @@ pub struct GenApp {
     description: String,
     flag_is_file: bool,
     flag: String,
+    value: (bool, i32),
     challenge_type: ChallengeType,
     provide: (Vec<String>, i32, bool),
 }
@@ -23,6 +24,7 @@ impl Default for GenApp {
             description: String::new(),
             flag_is_file: false,
             flag: String::new(),
+            value: (false, 1),
             challenge_type: ChallengeType::Other,
             provide: (vec![String::new()], 1, false),
         }
@@ -87,8 +89,26 @@ impl GenApp {
                 let mut yaml_template =
                     serde_yaml::from_str::<serde_yaml::Value>(yaml_string).unwrap();
                 // type YamlString =  serde_yaml::Value::String;
+
                 let mut exclude = Vec::new();
-                exclude.push(serde_yaml::Value::String("server/flag.txt".to_string()));
+                if self.flag_is_file {
+                    use std::path::Path;
+                    let flag_path = Path::new(&self.flag);
+                    let server_path = Path::new("server/flag.txt");
+                    if flag_path.parent() != server_path.parent() {
+                        // if the flag would not be in the zip
+                        if let serde_yaml::Value::Mapping(ref mut m) = yaml_template[1]["spec"] {
+                            m.remove("additional");
+                        } else {
+                            panic!("fake");
+                        }
+                    } else {
+                        yaml_template[1]["spec"]["additional"][0]["path"] =
+                            serde_yaml::Value::String(self.flag.clone());
+                        exclude.push(serde_yaml::Value::String(self.flag.clone()));
+                    }
+                }
+
                 for i in 0..self.provide.1 {
                     if !self.provide.0[i as usize].is_empty() {
                         exclude.push(serde_yaml::Value::String(
@@ -192,18 +212,32 @@ impl eframe::App for GenApp {
                 ui.label("Author: ");
                 ui.text_edit_singleline(&mut self.author);
             });
+
             ui.horizontal(|ui| {
                 ui.label("Name: ");
                 ui.text_edit_singleline(&mut self.name);
             });
+
             ui.horizontal(|ui| {
                 ui.label("Description: ");
                 ui.text_edit_multiline(&mut self.description);
             });
+
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.flag_is_file, "flag is file?");
                 ui.label("Flag: ");
                 ui.text_edit_singleline(&mut self.flag);
+            });
+
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.value.0, "static point value?");
+                if self.value.0 {
+                    ui.add(
+                        egui::DragValue::new(&mut self.value.1)
+                            .speed(1.0)
+                            .clamp_range(0..=1000),
+                    );
+                }
             });
 
             ui.radio_value(
@@ -223,7 +257,7 @@ impl eframe::App for GenApp {
                 if self.challenge_type != ChallengeType::WebServer {
                     ui.label("provide: ");
                 } else {
-                    ui.label("exclude (in addition to server/flag.txt): ");
+                    ui.label("exclude: ");
                 }
                 for i in 0..self.provide.1 {
                     ui.text_edit_singleline(&mut self.provide.0[i as usize]);
