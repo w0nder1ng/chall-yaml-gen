@@ -92,10 +92,12 @@ impl GenApp {
 
                 let mut exclude = Vec::new();
                 if self.flag_is_file {
-                    use std::path::Path;
+                    use std::ffi::OsStr;
+                    use std::path::{Component, Path};
                     let flag_path = Path::new(&self.flag);
-                    let server_path = Path::new("server/flag.txt");
-                    if flag_path.parent() != server_path.parent() {
+                    if flag_path.components().next()
+                        != Some(Component::Normal(OsStr::new("server")))
+                    {
                         // if the flag would not be in the zip
                         if let serde_yaml::Value::Mapping(ref mut m) = yaml_template[1]["spec"] {
                             m.remove("additional");
