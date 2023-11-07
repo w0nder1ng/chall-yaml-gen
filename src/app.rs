@@ -7,10 +7,10 @@ pub struct GenApp {
     flag: String,
     value: (bool, i32),
     challenge_type: ChallengeType,
-    provide: (Vec<String>, i32, bool),
+    provide: (Vec<String>, bool),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq)]
 pub enum ChallengeType {
     TCPBinary,
     WebServer(bool),
@@ -26,14 +26,14 @@ impl Default for GenApp {
             flag: String::new(),
             value: (false, 1),
             challenge_type: ChallengeType::Other,
-            provide: (vec![String::new()], 1, false),
+            provide: (vec![String::new()], false),
         }
     }
 }
 
 impl GenApp {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Default::default()
     }
 
@@ -73,7 +73,7 @@ impl GenApp {
             },
         );
         if let ChallengeType::WebServer(use_zip) = self.challenge_type {
-            if use_zip && self.provide.2 {
+            if use_zip && self.provide.1 {
                 let yaml_string = "
                 - kind: zip
                 - spec:
@@ -88,7 +88,6 @@ impl GenApp {
             ";
                 let mut yaml_template =
                     serde_yaml::from_str::<serde_yaml::Value>(yaml_string).unwrap();
-                // type YamlString =  serde_yaml::Value::String;
 
                 let mut exclude = Vec::new();
                 if self.flag_is_file {
@@ -98,7 +97,7 @@ impl GenApp {
                     if flag_path.components().next()
                         != Some(Component::Normal(OsStr::new("server")))
                     {
-                        // if the flag would not be in the zip
+                        // if the flag is outside server/, don't try to replace it with a dummy
                         if let serde_yaml::Value::Mapping(ref mut m) = yaml_template[1]["spec"] {
                             m.remove("additional");
                         } else {
@@ -111,7 +110,7 @@ impl GenApp {
                     }
                 }
 
-                for i in 0..self.provide.1 {
+                for i in 0..self.provide.0.len() {
                     if !self.provide.0[i as usize].is_empty() {
                         exclude.push(serde_yaml::Value::String(
                             self.provide.0[i as usize].clone(),
@@ -126,7 +125,7 @@ impl GenApp {
                 );
             } else {
                 let mut provide = Vec::new();
-                for i in 0..self.provide.1 {
+                for i in 0..self.provide.0.len() {
                     if !self.provide.0[i as usize].is_empty() {
                         provide.push(serde_yaml::Value::String(
                             self.provide.0[i as usize].clone(),
@@ -197,9 +196,9 @@ impl GenApp {
                     serde_yaml::from_str::<serde_yaml::Value>(expose).unwrap(),
                 );
             }
-            if self.provide.2 {
+            if self.provide.1 {
                 let mut seq = Vec::new();
-                for i in 0..self.provide.1 {
+                for i in 0..self.provide.0.len() {
                     seq.push(serde_yaml::Value::String(
                         self.provide.0[i as usize].clone(),
                     ));
@@ -270,8 +269,8 @@ impl eframe::App for GenApp {
                 "jailed binary",
             );
             ui.radio_value(&mut self.challenge_type, ChallengeType::Other, "other");
-            ui.checkbox(&mut self.provide.2, "provide files?");
-            if self.provide.2 {
+            ui.checkbox(&mut self.provide.1, "provide files?");
+            if self.provide.1 {
                 if let ChallengeType::WebServer(ref mut b) = self.challenge_type {
                     ui.checkbox(b, "provide all as zip?");
                 }
@@ -283,26 +282,20 @@ impl eframe::App for GenApp {
                         ui.label("provide: ");
                     }
                 }
-                for i in 0..self.provide.1 {
+                for i in 0..self.provide.0.len() {
                     ui.text_edit_singleline(&mut self.provide.0[i as usize]);
                 }
                 ui.horizontal(|ui| {
                     if ui.button("Add").clicked() {
                         self.provide.0.push(String::new());
-                        self.provide.1 += 1;
                     }
-                    if self.provide.1 >= 1 && ui.button("Remove").clicked() {
+                    if self.provide.0.len() >= 1 && ui.button("Remove").clicked() {
                         self.provide.0.pop();
-                        self.provide.1 -= 1;
                     }
                 });
             }
             if ui.button("copy challenge.yaml").clicked() {
-                // self.generated_yaml = ;
                 ui.output_mut(|o| o.copied_text = self.to_yaml());
-                // let mut file = std::fs::File::create("challenge.yaml").unwrap();
-                // file.write_all(yaml.as_bytes()).unwrap();
-                // self.has_generated = true;
             }
             match self.challenge_type {
                 ChallengeType::WebServer(_) => {
@@ -319,7 +312,7 @@ impl eframe::App for GenApp {
 - change the tcp port to an unused one (you can use `grep -nr tcp:` to see which ones are used)
 - store your files in bin/
 - think about whether or not you want to provide any files
-- if the app does not use pwn/jail, make sure port 5000 is correct",
+- if the app does not use pwn.red/jail, make sure port 5000 is correct",
                     );
                 }
                 _ => {}
