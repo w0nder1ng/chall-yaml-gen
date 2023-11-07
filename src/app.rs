@@ -13,7 +13,7 @@ pub struct GenApp {
 #[derive(PartialEq, Eq)]
 pub enum ChallengeType {
     TCPBinary,
-    WebServer,
+    WebServer(bool),
     Other,
 }
 impl Default for GenApp {
@@ -48,7 +48,7 @@ impl GenApp {
             serde_yaml::Value::String(self.author.clone()),
         );
         let mut description = self.description.clone();
-        if self.challenge_type == ChallengeType::WebServer {
+        if let ChallengeType::WebServer(_) = self.challenge_type {
             description.push_str("\n\n{{ link }}");
         } else if self.challenge_type == ChallengeType::TCPBinary {
             description.push_str("\n\n`{{ nc }}`");
@@ -72,8 +72,8 @@ impl GenApp {
                 }
             },
         );
-        if self.challenge_type == ChallengeType::WebServer {
-            if self.provide.2 {
+        if let ChallengeType::WebServer(use_zip) = self.challenge_type {
+            if use_zip && self.provide.2 {
                 let yaml_string = "
                 - kind: zip
                 - spec:
@@ -123,6 +123,19 @@ impl GenApp {
                 yaml.insert(
                     serde_yaml::Value::String("provide".to_string()),
                     yaml_template,
+                );
+            } else {
+                let mut provide = Vec::new();
+                for i in 0..self.provide.1 {
+                    if !self.provide.0[i as usize].is_empty() {
+                        provide.push(serde_yaml::Value::String(
+                            self.provide.0[i as usize].clone(),
+                        ));
+                    }
+                }
+                yaml.insert(
+                    serde_yaml::Value::String("provide".to_string()),
+                    serde_yaml::Value::Sequence(provide),
                 );
             }
 
@@ -241,10 +254,14 @@ impl eframe::App for GenApp {
                     );
                 }
             });
+            let current_state = match self.challenge_type {
+                ChallengeType::WebServer(b) => b,
+                _ => false,
+            };
 
             ui.radio_value(
                 &mut self.challenge_type,
-                ChallengeType::WebServer,
+                ChallengeType::WebServer(current_state),
                 "website",
             );
             ui.radio_value(
@@ -253,13 +270,18 @@ impl eframe::App for GenApp {
                 "jailed binary",
             );
             ui.radio_value(&mut self.challenge_type, ChallengeType::Other, "other");
-
             ui.checkbox(&mut self.provide.2, "provide files?");
             if self.provide.2 {
-                if self.challenge_type != ChallengeType::WebServer {
-                    ui.label("provide: ");
-                } else {
-                    ui.label("exclude: ");
+                if let ChallengeType::WebServer(ref mut b) = self.challenge_type {
+                    ui.checkbox(b, "provide all as zip?");
+                }
+                match self.challenge_type {
+                    ChallengeType::WebServer(b) => {
+                        ui.label(if b { "exclude: " } else { "provide: " });
+                    }
+                    _ => {
+                        ui.label("provide: ");
+                    }
                 }
                 for i in 0..self.provide.1 {
                     ui.text_edit_singleline(&mut self.provide.0[i as usize]);
@@ -275,17 +297,32 @@ impl eframe::App for GenApp {
                     }
                 });
             }
-            if let ChallengeType::TCPBinary = self.challenge_type {
-                ui.horizontal(|ui| {
-                    ui.label("Remember to change the port to a valid one after generating!");
-                });
-            }
             if ui.button("copy challenge.yaml").clicked() {
                 // self.generated_yaml = ;
                 ui.output_mut(|o| o.copied_text = self.to_yaml());
                 // let mut file = std::fs::File::create("challenge.yaml").unwrap();
                 // file.write_all(yaml.as_bytes()).unwrap();
                 // self.has_generated = true;
+            }
+            match self.challenge_type {
+                ChallengeType::WebServer(_) => {
+                    ui.label(
+                        "remember to:
+- change port 5000 to whatever your app uses
+- store all relevant files in a server/ folder
+- check that important files (secrets/keys/flag) are not included",
+                    );
+                }
+                ChallengeType::TCPBinary => {
+                    ui.label(
+                        "remember to:
+- change the tcp port to an unused one (you can use `grep -nr tcp:` to see which ones are used)
+- store your files in bin/
+- think about whether or not you want to provide any files
+- if the app does not use pwn/jail, make sure port 5000 is correct",
+                    );
+                }
+                _ => {}
             }
         });
     }
