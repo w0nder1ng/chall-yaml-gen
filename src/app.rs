@@ -76,7 +76,7 @@ impl GenApp {
             if use_zip && self.provide.1 {
                 let yaml_string = "
                 - kind: zip
-                - spec:
+                  spec:
                     as: server.zip
                     files:
                         - server
@@ -84,8 +84,7 @@ impl GenApp {
                         - server/flag.txt
                     additional:
                         - path: server/flag.txt
-                          str: flag{fake_flag}
-            ";
+                          str: flag{fake_flag}";
                 let mut yaml_template =
                     serde_yaml::from_str::<serde_yaml::Value>(yaml_string).unwrap();
 
@@ -98,13 +97,13 @@ impl GenApp {
                         != Some(Component::Normal(OsStr::new("server")))
                     {
                         // if the flag is outside server/, don't try to replace it with a dummy
-                        if let serde_yaml::Value::Mapping(ref mut m) = yaml_template[1]["spec"] {
+                        if let serde_yaml::Value::Mapping(ref mut m) = yaml_template[0]["spec"] {
                             m.remove("additional");
                         } else {
                             panic!("fake");
                         }
                     } else {
-                        yaml_template[1]["spec"]["additional"][0]["path"] =
+                        yaml_template[0]["spec"]["additional"][0]["path"] =
                             serde_yaml::Value::String(self.flag.clone());
                         exclude.push(serde_yaml::Value::String(self.flag.clone()));
                     }
@@ -117,7 +116,7 @@ impl GenApp {
                         ));
                     }
                 }
-                yaml_template[1]["spec"]["exclude"] = serde_yaml::Value::Sequence(exclude);
+                yaml_template[0]["spec"]["exclude"] = serde_yaml::Value::Sequence(exclude);
 
                 yaml.insert(
                     serde_yaml::Value::String("provide".to_string()),
@@ -141,8 +140,7 @@ impl GenApp {
             let expose = "
             main:
                 - target: 5000
-                  http: dummy
-            ";
+                  http: dummy";
             let mut expose = serde_yaml::from_str::<serde_yaml::Value>(expose).unwrap();
             expose["main"][0]["http"] = self.name.clone().into();
             yaml.insert(serde_yaml::Value::String("expose".to_string()), expose);
@@ -151,8 +149,7 @@ impl GenApp {
             main:
                 build: server
                 ports:
-                    - 5000
-            ";
+                    - 5000";
             yaml.insert(
                 serde_yaml::Value::String("containers".to_string()),
                 serde_yaml::from_str::<serde_yaml::Value>(containers).unwrap(),
@@ -179,8 +176,7 @@ impl GenApp {
                                         - sys_admin
                         metadata:
                             annotations:
-                                container.apparmor.security.beta.kubernetes.io/main: unconfined
-                ";
+                                container.apparmor.security.beta.kubernetes.io/main: unconfined";
                 yaml.insert(
                     serde_yaml::Value::String("containers".to_string()),
                     serde_yaml::from_str::<serde_yaml::Value>(containers).unwrap(),
@@ -189,8 +185,7 @@ impl GenApp {
                 let expose = "
                 main:
                     - target: 5000
-                      tcp: CHANGE_ME
-                ";
+                      tcp: CHANGE_ME";
                 yaml.insert(
                     serde_yaml::Value::String("expose".to_string()),
                     serde_yaml::from_str::<serde_yaml::Value>(expose).unwrap(),
@@ -303,7 +298,8 @@ impl eframe::App for GenApp {
                         "remember to:
 - change port 5000 to whatever your app uses
 - store all relevant files in a server/ folder
-- check that important files (secrets/keys/flag) are not included",
+- check that important files (secrets/keys/flag) are not included
+- make sure the flag prefix is correct (flag{}, tjctf{}, etc.)",
                     );
                 }
                 ChallengeType::TCPBinary => {
@@ -312,7 +308,8 @@ impl eframe::App for GenApp {
 - change the tcp port to an unused one (you can use `grep -nr tcp:` to see which ones are used)
 - store your files in bin/
 - think about whether or not you want to provide any files
-- if the app does not use pwn.red/jail, make sure port 5000 is correct",
+- if the app does not use pwn.red/jail, make sure port 5000 is correct
+- make sure the flag prefix is correct (flag{}, tjctf{}, etc.)",
                     );
                 }
                 _ => {}
